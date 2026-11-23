@@ -1,46 +1,337 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EarnBD - Refer • Watch • Work • Earn</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --navy:#071b36;
+  --blue:#102e55;
+  --gold:#e7b84b;
+  --white:#fff;
+  --bg:#f3f6fb;
+  --text:#17243a;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--navy);color:white;padding:18px 16px;display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:25px;font-weight:bold;color:var(--gold)}
+header small{color:#dce6f5}
+.container{max-width:1000px;margin:22px auto;padding:0 14px}
+.card{background:white;padding:20px;border-radius:15px;margin-bottom:16px;box-shadow:0 4px 18px #0b234010}
+h2,h3{color:var(--navy)}
+input,button{width:100%;padding:13px;margin:7px 0;border-radius:9px;font-size:15px}
+input{border:1px solid #d5deea;background:#fff}
+button{border:0;background:var(--navy);color:white;font-weight:bold;cursor:pointer}
+button.gold{background:var(--gold);color:#17243a}
+button.light{background:#e9eff8;color:var(--navy)}
+button:disabled{opacity:.5}
+.hidden{display:none!important}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat{background:var(--navy);color:white;padding:17px;border-radius:13px}
+.stat strong{display:block;font-size:23px;color:var(--gold);margin-top:8px}
+.nav{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.notice{padding:12px;background:#fff7df;border-left:4px solid var(--gold);border-radius:8px;font-size:14px}
+.muted{color:#68768b;font-size:13px}
+#message{padding:10px;border-radius:8px;margin:10px 0;display:none}
+footer{text-align:center;padding:25px;color:#78869a}
+</style>
+</head>
+<body>
 
--- User নিজের Profile দেখতে পারবে
-DROP POLICY IF EXISTS own_profile_read ON public.profiles;
+<header>
+  <div>
+    <div class="logo">EarnBD</div>
+    <small>Refer • Watch • Work • Earn</small>
+  </div>
+  <button id="logoutBtn" class="light hidden" style="width:auto" onclick="logout()">Logout</button>
+</header>
 
-CREATE POLICY own_profile_read
-ON public.profiles
-FOR SELECT TO authenticated
-USING (id = auth.uid());
+<div class="container">
+  <div id="message"></div>
 
--- User নিজের Wallet দেখতে পারবে
-DROP POLICY IF EXISTS own_wallet_read ON public.wallets;
+  <!-- AUTH -->
+  <section id="authSection">
+    <div class="card">
+      <h2>Welcome to EarnBD</h2>
+      <p class="muted">Create an account or login to continue.</p>
+      <div class="nav">
+        <button id="loginTab" onclick="showAuth('login')">Login</button>
+        <button id="registerTab" class="light" onclick="showAuth('register')">Register</button>
+      </div>
 
-CREATE POLICY own_wallet_read
-ON public.wallets
-FOR SELECT TO authenticated
-USING (user_id = auth.uid());
+      <div id="loginForm">
+        <h3>Login Account</h3>
+        <input id="loginEmail" type="email" placeholder="Email address">
+        <input id="loginPassword" type="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+      </div>
 
--- Admin সবকিছু পরিচালনা করতে পারবে
-DO $$
-DECLARE
-  tbl TEXT;
-BEGIN
-  FOREACH tbl IN ARRAY ARRAY[
-    'profiles', 'wallets', 'deposits',
-    'withdrawals', 'ledger'
-  ]
-  LOOP
-    EXECUTE format(
-      'DROP POLICY IF EXISTS admin_full_access ON public.%I',
-      tbl
-    );
+      <div id="registerForm" class="hidden">
+        <h3>Create New Account</h3>
+        <input id="regName" placeholder="Full Name">
+        <input id="regMobile" type="tel" placeholder="Mobile Number">
+        <input id="regEmail" type="email" placeholder="Email Address">
+        <input id="regPassword" type="password" placeholder="Password (minimum 6 characters)">
+        <input id="regReferral" placeholder="Referral Code (Required)">
+        <button class="gold" onclick="register()">Create Account</button>
+        <p class="muted">Registration requires a valid referral code from an existing EarnBD member.</p>
+      </div>
+    </div>
+  </section>
 
-    EXECUTE format(
-      'CREATE POLICY admin_full_access ON public.%I
-       FOR ALL TO authenticated
-       USING (public.is_admin())
-       WITH CHECK (public.is_admin())',
-      tbl
-    );
-  END LOOP;
-END;
-$$;
+  <!-- USER DASHBOARD -->
+  <section id="userSection" class="hidden">
+    <div class="card">
+      <h2>Welcome, <span id="userName">Member</span>!</h2>
+      <p class="muted">Your EarnBD dashboard</p>
+    </div>
 
-GRANT SELECT ON public.profiles, public.wallets
-TO authenticated;
+    <div class="grid">
+      <div class="stat">Wallet Balance<strong id="balance">৳0.00</strong></div>
+      <div class="stat">Referral Code<strong id="myCode">------</strong></div>
+      <div class="stat">Total Referrals<strong id="refCount">0</strong></div>
+    </div>
 
+    <div class="card">
+      <h3>Your Referral Link</h3>
+      <input id="refLink" readonly>
+      <button onclick="copyReferral()">Copy Referral Link</button>
+    </div>
+
+    <div class="card">
+      <h3>EarnBD Services</h3>
+      <div class="nav">
+        <button onclick="comingSoon('Deposit')">Deposit</button>
+        <button onclick="comingSoon('Withdraw')">Withdraw</button>
+        <button onclick="comingSoon('Daily Tasks')">Daily Tasks</button>
+        <button onclick="comingSoon('Ads')">Watch Ads</button>
+        <button onclick="comingSoon('Transaction History')">History</button>
+        <button onclick="comingSoon('Profile')">My Profile</button>
+      </div>
+    </div>
+    <div class="notice">সতর্কতা: কোনো Deposit বা Withdrawal এখনো সক্রিয় নয়। কোনো পেমেন্ট পাঠাবে না।</div>
+  </section>
+
+  <!-- ADMIN DASHBOARD -->
+  <section id="adminSection" class="hidden">
+    <div class="card">
+      <h2>EarnBD Admin Dashboard</h2>
+      <p class="muted">Administrator Control Panel</p>
+      <span class="notice">Admin access detected.</span>
+    </div>
+    <div class="grid">
+      <div class="stat">Total Users<strong id="totalUsers">0</strong></div>
+      <div class="stat">Deposits<strong id="totalDeposits">0</strong></div>
+      <div class="stat">Withdrawals<strong id="totalWithdrawals">0</strong></div>
+      <div class="stat">Transactions<strong id="totalLedger">0</strong></div>
+    </div>
+    <div class="card">
+      <h3>Admin Management</h3>
+      <p>পরবর্তী ধাপে User Management, Deposit Approval, Withdrawal Approval এবং Task Management তৈরি করা হবে।</p>
+      <button onclick="comingSoon('User Management')">User Management</button>
+      <button onclick="comingSoon('Payment Management')">Payment Management</button>
+      <button onclick="comingSoon('Task Management')">Task Management</button>
+    </div>
+  </section>
+</div>
+
+<footer>© 2026 EarnBD | Refer • Watch • Work • Earn</footer>
+
+<script>
+const SUPABASE_URL = "https://sqxdxacwtmukcinzloid.supabase.co";
+const SUPABASE_KEY = "sb_publishable_iG05o6vcE6giwKWt_HCa-Q_xz4BPszf";
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+
+function message(text, error=false) {
+  const el = document.getElementById("message");
+  el.style.display = "block";
+  el.style.background = error ? "#ffe8e8" : "#e6f8ed";
+  el.style.color = error ? "#a40000" : "#116432";
+  el.textContent = text;
+}
+
+function showAuth(type) {
+  document.getElementById("loginForm").classList.toggle("hidden",type!=="login");
+  document.getElementById("registerForm").classList.toggle("hidden",type!=="register");
+  document.getElementById("loginTab").className=type==="login"?"":"light";
+  document.getElementById("registerTab").className=type==="register"?"":"light";
+}
+
+function showSection(section) {
+  ["authSection","userSection","adminSection"].forEach(id =>
+    document.getElementById(id).classList.add("hidden")
+  );
+  document.getElementById(section).classList.remove("hidden");
+  document.getElementById("logoutBtn").classList.toggle("hidden",section==="authSection");
+}
+
+async function register() {
+  const full_name=document.getElementById("regName").value.trim();
+  const mobile_number=document.getElementById("regMobile").value.trim();
+  const email=document.getElementById("regEmail").value.trim();
+  const password=document.getElementById("regPassword").value;
+  const referral_code=document.getElementById("regReferral").value.trim().toUpperCase();
+
+  if(!full_name || !mobile_number || !email || !password || !referral_code)
+    return message("সব তথ্য পূরণ করো।",true);
+
+  if(password.length<6)
+    return message("Password কমপক্ষে ৬ অক্ষরের হতে হবে।",true);
+
+  const {data:referrer,error:refError}=await db
+    .from("profiles")
+    .select("id")
+    .eq("referral_code",referral_code)
+    .maybeSingle();
+
+  if(refError) return message("Referral যাচাই করা যায়নি: "+refError.message,true);
+  if(!referrer) return message("Referral Code সঠিক নয়।",true);
+
+  const {data,error}=await db.auth.signUp({
+    email,
+    password,
+    options:{
+      data:{
+        full_name,
+        mobile_number,
+        referral_code
+      }
+    }
+  });
+
+  if(error) return message(error.message,true);
+
+  if(data.session) {
+    message("Registration successful!");
+    await loadDashboard(data.user);
+  } else {
+    message("Account তৈরি হয়েছে। Email confirmation চালু থাকলে ইমেইল যাচাই করে Login করো।");
+    showAuth("login");
+  }
+}
+
+async function login() {
+  const email=document.getElementById("loginEmail").value.trim();
+  const password=document.getElementById("loginPassword").value;
+  if(!email || !password) return message("Email ও Password দাও।",true);
+
+  const {data,error}=await db.auth.signInWithPassword({email,password});
+  if(error) return message(error.message,true);
+  await loadDashboard(data.user);
+}
+
+async function loadDashboard(user) {
+  currentUser=user;
+  const {data:profile,error}=await db
+    .from("profiles")
+    .select("*")
+    .eq("id",user.id)
+    .maybeSingle();
+
+  if(error) return message("Profile load error: "+error.message,true);
+  if(!profile) return message("Profile পাওয়া যায়নি। Database trigger পরীক্ষা করতে হবে।",true);
+
+  currentProfile=profile;
+
+  if(profile.role==="admin") {
+    showSection("adminSection");
+    await loadAdminStats();
+  } else {
+    showSection("userSection");
+    document.getElementById("userName").textContent=profile.full_name || "Member";
+    document.getElementById("myCode").textContent=profile.referral_code || "------";
+    document.getElementById("refLink").value=
+      location.origin+location.pathname+"?ref="+(profile.referral_code || "");
+    await loadWallet();
+    await loadReferralCount();
+  }
+}
+
+async function loadWallet() {
+  const {data,error}=await db.from("wallets").select("*")
+    .eq("user_id",currentUser.id).maybeSingle();
+
+  if(error) {
+    message("Wallet load error: "+error.message,true);
+    return;
+  }
+  if(!data) {
+    document.getElementById("balance").textContent="৳0.00";
+    return;
+  }
+
+  const amount=data.balance ?? data.available_balance ?? data.main_balance ?? 0;
+  document.getElementById("balance").textContent="৳"+Number(amount).toFixed(2);
+}
+
+async function loadReferralCount() {
+  const {count,error}=await db.from("profiles")
+    .select("id",{count:"exact",head:true})
+    .eq("referred_by",currentUser.id);
+
+  if(error) {
+    document.getElementById("refCount").textContent="—";
+    return;
+  }
+  document.getElementById("refCount").textContent=count ?? 0;
+}
+
+async function loadAdminStats() {
+  const tables=[
+    ["profiles","totalUsers"],
+    ["deposits","totalDeposits"],
+    ["withdrawals","totalWithdrawals"],
+    ["ledger","totalLedger"]
+  ];
+
+  for(const [table,id] of tables) {
+    const {count,error}=await db.from(table).select("*",{count:"exact",head:true});
+    document.getElementById(id).textContent=error?"—":(count ?? 0);
+  }
+}
+
+async function copyReferral() {
+  const link=document.getElementById("refLink").value;
+  try {
+    await navigator.clipboard.writeText(link);
+    message("Referral link copied!");
+  } catch(e) {
+    document.getElementById("refLink").select();
+    message("Link select করা হয়েছে। Copy করো।");
+  }
+}
+
+function comingSoon(name) {
+  message(name+" সিস্টেম এখনো তৈরি হয়নি। পরবর্তী ধাপে চালু করা হবে।");
+}
+
+async function logout() {
+  await db.auth.signOut();
+  currentUser=null;
+  currentProfile=null;
+  showSection("authSection");
+  message("Logout successful.");
+}
+
+async function startApp() {
+  const {data:{session}}=await db.auth.getSession();
+  if(session?.user) await loadDashboard(session.user);
+  else showSection("authSection");
+}
+
+db.auth.onAuthStateChange((event,session)=>{
+  if(event==="SIGNED_OUT") showSection("authSection");
+});
+
+startApp();
+</script>
+</body>
+  </html>
+  
