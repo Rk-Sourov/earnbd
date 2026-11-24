@@ -228,6 +228,24 @@ async function login() {
   await loadDashboard(data.user);
 }
 
+async function sendResetEmail() {
+  const email = document.getElementById("loginEmail").value.trim();
+
+  if (!email) {
+    return message("প্রথমে Login Email লিখো।", true);
+  }
+
+  const { error } = await db.auth.resetPasswordForEmail(email, {
+    redirectTo: "https://rk-sourov.github.io/earnbd/"
+  });
+
+  if (error) {
+    return message(error.message, true);
+  }
+
+  message("Password Reset Link তোমার Email-এ পাঠানো হয়েছে।");
+}
+  
 async function loadDashboard(user) {
   currentUser=user;
   const {data:profile,error}=await db
